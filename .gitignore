@@ -47,3 +47,6 @@ experiments/camvid_real/outputs/
 
 # Keep generated report PDFs trackable when needed.
 !template/main_report.pdf
+
+# Intermediate panels generated while composing report figures.
+template/figures/camvid_color_labels/
