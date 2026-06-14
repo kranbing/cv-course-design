@@ -1,0 +1,15 @@
+{
+  "dataset": "data\\camvid",
+  "train_count": 600,
+  "test_count": 101,
+  "classes": 32,
+  "ignore_index": 30,
+  "image_size": [
+    96,
+    128
+  ],
+  "epochs": 20,
+  "batch_size": 8,
+  "lr": 0.001,
+  "split": "fastai CamVid valid.txt"
+}

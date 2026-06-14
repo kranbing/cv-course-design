@@ -1,0 +1,355 @@
+% !Mode:: "TeX:UTF-8"
+% !TEX program = xelatex
+
+\documentclass{report}
+
+\usepackage{amsmath}
+\usepackage{booktabs}
+\usepackage{graphicx}
+\usepackage{multirow}
+\usepackage{array}
+\usepackage{tikz}
+\usepackage{pgfplots}
+\usepackage{float}
+\usetikzlibrary{arrows.meta,positioning,fit,calc}
+\pgfplotsset{compat=1.17}
+
+\title{基于Transformer的城市道路场景语义分割复现与边界增强改进}
+\stunum{第*组}
+\stuname{张三、李四、王五}
+\stuclass{计算机科学与技术20**级*班}
+\supervisor{**** \hspace{1.0em} 老师}
+\dateinput{\today}
+
+\begin{document}
+
+\maketitle
+
+\pagestyle{plain}
+\pagenumbering{Roman}
+\tableofcontents
+\newpage
+\pagestyle{plain}
+
+\setcounter{page}{1}
+\pagenumbering{arabic}
+
+\section{团队成员分工}
+
+本课程设计围绕城市道路场景语义分割问题展开，主要完成近五年代表性论文精读、官方代码结构分析、核心算法思路整理、完整CamVid方法对比实验、改进方法设计以及报告撰写等工作。团队成员分工如下：
+
+\begin{itemize}
+    \item 张三：负责语义分割研究背景调研、SegFormer论文精读、MiT编码器与MLP解码器原理分析。
+    \item 李四：负责Mask2Former、PIDNet、Segment Anything论文阅读，整理近年分割方法的发展脉络与官方代码结构。
+    \item 王五：负责完整CamVid方法对比实验、边界增强改进方案设计、图表绘制与报告整合。
+\end{itemize}
+
+若以个人形式完成，可将以上分工调整为“本人独立完成文献调研、算法分析、实验训练、图表绘制和报告撰写”。
+
+\section{任务背景}
+
+语义分割是计算机视觉领域中的一类典型密集预测任务，其目标是为图像中的每一个像素分配一个语义类别标签。与图像分类只判断整幅图像所属类别不同，语义分割需要同时理解图像中的物体类别、空间位置和边界形状，因此在自动驾驶、智能交通、移动机器人、遥感影像分析、医学图像处理等场景中具有重要价值。在城市道路场景中，感知系统需要识别道路、车道、人行道、车辆、行人、建筑、天空和交通标志等不同区域。若分割边界不准确，可能造成道路边缘误判、小目标漏检或动态障碍物识别错误，从而影响后续路径规划和安全决策。
+
+早期语义分割方法主要依赖手工特征和传统分类器，例如超像素、条件随机场和随机森林等。深度学习兴起后，Fully Convolutional Network将分类网络中的全连接层替换为卷积层，使网络能够输出空间分辨率较高的像素级预测图，成为深度语义分割的重要起点。随后，UNet通过编码器和解码器之间的跳跃连接增强了细节恢复能力，DeepLab系列利用空洞卷积和空间金字塔池化扩大感受野，PSPNet通过金字塔池化聚合全局上下文。这些CNN方法在相当长时间内占据主流，但卷积运算具有局部感受野，虽然可以通过堆叠层数扩大上下文范围，却仍然存在全局依赖建模效率不足的问题。
+
+近五年来，Transformer在视觉任务中快速发展。Vision Transformer将图像划分为patch并利用自注意力建模长距离依赖，证明了纯Transformer结构在图像识别中的可行性。对于语义分割这类密集预测任务，研究者进一步提出了层次化Transformer、多尺度特征融合、mask classification和视觉基础模型等方向。SegFormer提出了Mix Transformer编码器和轻量MLP解码器，在精度和效率之间取得良好平衡\cite{segformer}；Mask2Former将语义分割、实例分割和全景分割统一到mask分类框架中\cite{mask2former}；PIDNet从实时分割需求出发，引入类似PID控制的三分支设计，强调边界分支对道路场景的重要性\cite{pidnet}；Segment Anything则通过大规模数据和提示式分割展示了视觉基础模型的发展趋势\cite{sam}。
+
+本课程设计选择“基于Transformer的城市道路场景语义分割复现与边界增强改进”作为主题，原因有三点。第一，语义分割是计算机视觉中的基础问题，算法原理清晰且实验评价体系成熟。第二，SegFormer、Mask2Former、PIDNet和SAM均为近五年具有代表性的成果，能够覆盖高效Transformer、统一分割框架、实时分割和基础模型等不同技术路线。第三，道路场景对边界质量要求较高，适合在现有模型基础上提出轻量改进，即在SegFormer解码端加入边界增强分支，通过边界监督改善车辆轮廓、道路边缘和行人等区域的分割质量。
+
+\section{任务描述}
+
+本文研究的具体任务是城市道路场景语义分割。给定一幅道路场景RGB图像，模型需要输出与输入图像空间尺寸对应的语义标签图，每个像素被分配到道路、建筑、天空、车辆、行人、人行道、树木、交通标志等类别之一。该任务本质上是像素级多分类问题，其难点主要体现在以下几个方面。
+
+第一，城市道路图像具有复杂的尺度变化。同一图像中既可能包含大面积道路和天空，也可能存在远处车辆、行人和交通标志等小目标。第二，类别之间边界细节复杂，例如道路和人行道、车辆和背景、行人和建筑之间经常存在细窄边缘区域。第三，不同天气、光照、遮挡和视角会造成明显外观变化，使模型需要具备较强的上下文理解能力和泛化能力。第四，在实际智能交通场景中，算法不仅需要准确，还需要较高推理速度，这要求模型在精度和效率之间取得平衡。
+
+本文的工作目标包括：
+
+\begin{enumerate}
+    \item 查阅并精读近五年语义分割领域的代表性论文，重点分析SegFormer、Mask2Former、PIDNet和Segment Anything的理论原理、网络结构和算法特点。
+    \item 主动研究论文附带的GitHub官方代码，整理其核心模块、训练入口、推理流程和与论文原理之间的对应关系。
+    \item 以SegFormer-B0作为主要复现对象，分析其Mix Transformer编码器、空间缩减注意力和MLP解码器的实现方式。
+    \item 基于完整CamVid数据划分搭建本机训练与测试流程，重点比较不同方法的精度、速度和边界质量。
+    \item 借鉴PIDNet的边界辅助思想，提出轻量边界增强方法，并将其作为完整方法参与横向对比实验。
+    \item 明确区分已有工作和本文设计工作：SegFormer、Mask2Former、PIDNet和SAM的主体算法属于已有论文成果；本文的工作是在轻量Transformer分割框架上设计边界增强分支，并在CamVid上完成方法对比。
+\end{enumerate}
+
+\section{技术方案}
+
+\subsection{方案总体架构}
+
+本文总体技术路线如图\ref{fig:pipeline}所示。首先进行文献调研和官方代码分析，确定语义分割方法对比对象；其次构建实验方案，包括数据集设定、评价指标、基线模型、主模型和改进模型；然后围绕边界增强思想设计轻量分支和联合损失函数；最后通过完整CamVid方法对比实验和定性分析，讨论不同方法的优势与不足。
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[
+    node distance=1.1cm and 1.2cm,
+    block/.style={draw, rounded corners=2pt, align=center, minimum height=0.85cm, minimum width=2.6cm, fill=gray!10},
+    arrow/.style={-Latex, thick}
+]
+\node[block] (paper) {论文精读\\SegFormer等};
+\node[block, right=of paper] (code) {官方代码分析\\模块映射};
+\node[block, right=of code] (model) {分割方法\\横向对比};
+\node[block, below=of model] (edge) {边界增强分支\\本文改进};
+\node[block, left=of edge] (exp) {完整CamVid\\方法对比};
+\node[block, left=of exp] (report) {结论分析\\报告撰写};
+\draw[arrow] (paper) -- (code);
+\draw[arrow] (code) -- (model);
+\draw[arrow] (model) -- (edge);
+\draw[arrow] (edge) -- (exp);
+\draw[arrow] (exp) -- (report);
+\end{tikzpicture}
+\caption{本文课程设计总体流程}
+\label{fig:pipeline}
+\end{figure}
+
+本文实验部分采用“完整CamVid本机训练 + 官方代码结构分析”的组合方式完成。本机实验用于比较UNetSmall、TinySegFormer和TinySegFormer\_Boundary三种方法在相同数据划分下的性能；官方代码分析用于讨论SegFormer、Mask2Former、PIDNet和SAM等代表性论文方法的结构特点。该方式的重点是围绕同一数据集完成可重复的横向方法比较，说明不同算法设计对语义分割精度、速度和边界质量的影响。
+
+\subsection{代表性论文与方法分析}
+
+\subsubsection{SegFormer}
+
+SegFormer是本文的核心复现对象。该方法针对视觉Transformer在语义分割中的两个问题进行了改进：一是普通ViT缺少适合密集预测的多尺度特征，二是固定位置编码会限制模型在不同输入分辨率上的泛化。SegFormer提出Mix Transformer编码器，通过四个stage逐级降低特征图分辨率并提升通道数，得到类似CNN主干的层次化多尺度特征。同时，SegFormer不使用显式位置编码，而是在MLP模块中加入depth-wise convolution，使模型能够在保留灵活输入尺寸的同时获得局部位置信息。
+
+SegFormer编码器中的注意力模块采用空间缩减策略。对输入特征$X$计算query时保持原空间分辨率，而对key和value进行降采样，从而降低自注意力计算复杂度。若原始token数量为$N$，缩减比例为$R$，则key和value的长度约变为$N/R^2$，注意力复杂度由$O(N^2)$降低为$O(N^2/R^2)$。这种设计对高分辨率语义分割任务非常重要，因为密集预测需要保留较大的特征图。
+
+SegFormer解码器则非常轻量。它将四个stage输出的特征分别通过MLP投影到统一维度，再上采样到相同空间尺寸并拼接融合，最后用$1 \times 1$卷积输出类别logits。与DeepLabV3+等复杂解码器相比，SegFormer的解码器结构简单，参数量小，能够减少计算开销。本文选择SegFormer-B0作为复现对象，主要是因为其参数量较小、结构清晰，适合课程设计中进行原理分析和改进设计。
+
+\subsubsection{Mask2Former}
+
+Mask2Former代表了语义分割范式的另一条路线。传统语义分割通常将任务建模为逐像素分类，即每个像素独立预测类别。Mask2Former则将分割问题转化为mask classification：模型生成一组候选mask，每个mask对应一个类别预测。该思想使语义分割、实例分割和全景分割可以在同一框架中处理。
+
+Mask2Former的关键是masked attention。普通cross-attention让query关注整幅特征图，而masked attention将注意力限制在当前预测mask相关的区域中，使query能够更聚焦地更新对应目标区域。这种设计提高了mask预测质量，也减少了背景区域对query更新的干扰。Mask2Former还结合pixel decoder、transformer decoder、匈牙利匹配和多任务损失，整体结构较复杂，训练成本也高于SegFormer。因此本文将Mask2Former作为理论分析对象，用于说明分割任务从像素分类向mask分类的演进，而不将其纳入本次轻量benchmark横向实验。
+
+\subsubsection{PIDNet}
+
+PIDNet面向实时语义分割，提出了受PID控制器启发的三分支网络结构。论文指出，已有双分支实时分割网络通常包含细节分支和语义分支，可类比为比例项和积分项，但容易在边界区域产生overshoot现象，即边界模糊、类别区域扩张或细小结构缺失。PIDNet增加了专门的边界分支，类比微分项，用于捕获高频边缘信息，并通过边界注意力辅助语义分割结果。
+
+PIDNet对本文的启发在于：道路场景语义分割不仅需要全局上下文，也需要准确边界。车辆轮廓、道路边缘、行人等区域往往只占少量像素，但对视觉感知非常关键。因此，本文不直接复现PIDNet的三分支CNN结构，而是借鉴其边界辅助思想，在SegFormer的MLP解码器后增加轻量边界预测头，通过额外的边界监督提升边缘区域分割质量。
+
+\subsubsection{Segment Anything}
+
+Segment Anything是近年来视觉基础模型在分割领域的重要代表。它通过大规模SA-1B数据集训练，使模型能够根据点、框、文本等提示生成通用掩码。SAM由image encoder、prompt encoder和mask decoder组成，其中image encoder负责提取图像特征，prompt encoder编码用户提示，mask decoder输出候选mask和置信度。
+
+SAM与本文任务的区别在于，它主要解决promptable segmentation问题，不直接输出道路、车辆、行人等语义类别。因此，SAM不能简单替代城市道路语义分割模型。但它说明了分割任务的发展趋势：从固定类别监督学习走向大规模预训练和交互式掩码生成。本文在总结部分将其作为未来扩展方向，例如使用SAM生成伪标签或辅助边界标注。
+
+\subsection{SegFormer复现模型}
+
+本文复现主线以SegFormer-B0为核心。其结构如图\ref{fig:segformer}所示。输入图像首先经过重叠patch embedding，将局部图像块映射为token序列。随后经过四个Mix Transformer stage，每个stage包含多头自注意力、空间缩减模块、MLP和残差连接。四个stage输出不同分辨率的特征图，分别表示浅层边缘纹理、中层局部结构和高层语义上下文。解码阶段将四级特征统一投影、上采样、拼接融合，并输出最终语义预测。
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[
+    block/.style={draw, rounded corners=2pt, align=center, minimum width=2.4cm, minimum height=0.8cm, fill=blue!8},
+    small/.style={draw, rounded corners=2pt, align=center, minimum width=1.8cm, minimum height=0.65cm, fill=green!8},
+    arrow/.style={-Latex, thick}
+]
+\node[block] (input) {输入图像};
+\node[block, right=0.8cm of input] (s1) {Stage 1\\1/4};
+\node[block, right=0.8cm of s1] (s2) {Stage 2\\1/8};
+\node[block, right=0.8cm of s2] (s3) {Stage 3\\1/16};
+\node[block, right=0.8cm of s3] (s4) {Stage 4\\1/32};
+\node[small, below=1.0cm of s1] (m1) {MLP};
+\node[small, below=1.0cm of s2] (m2) {MLP};
+\node[small, below=1.0cm of s3] (m3) {MLP};
+\node[small, below=1.0cm of s4] (m4) {MLP};
+\node[block, below=1.1cm of $(m2)!0.5!(m3)$] (fusion) {上采样与拼接融合};
+\node[block, right=0.9cm of fusion] (out) {语义分割图};
+\draw[arrow] (input) -- (s1);
+\draw[arrow] (s1) -- (s2);
+\draw[arrow] (s2) -- (s3);
+\draw[arrow] (s3) -- (s4);
+\draw[arrow] (s1) -- (m1);
+\draw[arrow] (s2) -- (m2);
+\draw[arrow] (s3) -- (m3);
+\draw[arrow] (s4) -- (m4);
+\draw[arrow] (m1) -- (fusion);
+\draw[arrow] (m2) -- (fusion);
+\draw[arrow] (m3) -- (fusion);
+\draw[arrow] (m4) -- (fusion);
+\draw[arrow] (fusion) -- (out);
+\end{tikzpicture}
+\caption{SegFormer多尺度编码器与MLP解码器结构示意图}
+\label{fig:segformer}
+\end{figure}
+
+设四级特征为$C_1,C_2,C_3,C_4$，解码器首先使用线性层$\phi_i$将各级特征映射到统一通道维度：
+
+\begin{equation}
+F_i = \phi_i(C_i), \quad i=1,2,3,4.
+\end{equation}
+
+然后将$F_2,F_3,F_4$上采样到$F_1$的空间大小，并进行拼接：
+
+\begin{equation}
+F = Concat(F_1, Up(F_2), Up(F_3), Up(F_4)).
+\end{equation}
+
+最后使用卷积分类器得到每个像素的类别logits：
+
+\begin{equation}
+Y_{sem} = Conv_{1 \times 1}(F).
+\end{equation}
+
+\subsection{本文边界增强改进方法}
+
+本文提出的改进方法是在SegFormer-B0解码器后增加轻量边界增强分支。其结构如图\ref{fig:ours}所示。该分支不改变MiT编码器，也不改变原始语义分割输出，而是从解码器融合特征$F$中额外预测二值边界图$Y_{edge}$。训练时同时优化语义分类损失和边界预测损失，推理时主要使用语义输出，边界分支作为特征约束提高模型对轮廓区域的敏感性。
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[
+    block/.style={draw, rounded corners=2pt, align=center, minimum width=2.55cm, minimum height=0.8cm, fill=gray!10},
+    sem/.style={draw, rounded corners=2pt, align=center, minimum width=2.55cm, minimum height=0.8cm, fill=blue!10},
+    edge/.style={draw, rounded corners=2pt, align=center, minimum width=2.55cm, minimum height=0.8cm, fill=orange!15},
+    arrow/.style={-Latex, thick}
+]
+\node[block] (feat) {多尺度融合特征 $F$};
+\node[sem, right=1.2cm of feat] (semhead) {语义分类头\\$1\times1$ Conv};
+\node[edge, below=0.95cm of semhead] (edgehead) {边界预测头\\$3\times3$ Conv + $1\times1$ Conv};
+\node[sem, right=1.2cm of semhead] (semout) {语义输出\\$Y_{sem}$};
+\node[edge, right=1.2cm of edgehead] (edgeout) {边界输出\\$Y_{edge}$};
+\node[block, below=0.9cm of feat] (label) {标签生成\\语义标签 $Y$ 到边界 $B$};
+\draw[arrow] (feat) -- (semhead);
+\draw[arrow] (semhead) -- (semout);
+\draw[arrow] (feat) |- (edgehead);
+\draw[arrow] (edgehead) -- (edgeout);
+\draw[arrow] (label) -- (edgehead);
+\end{tikzpicture}
+\caption{本文提出的边界增强SegFormer结构}
+\label{fig:ours}
+\end{figure}
+
+边界标签由原始语义标签自动生成。对于标签图$Y$，先进行形态学膨胀和腐蚀，再取二者差集得到边界区域：
+
+\begin{equation}
+B = Dilate(Y) - Erode(Y).
+\end{equation}
+
+本文使用联合损失函数训练模型：
+
+\begin{equation}
+\mathcal{L} = \mathcal{L}_{ce}(Y_{sem}, Y) + \lambda \mathcal{L}_{bce}(Y_{edge}, B),
+\end{equation}
+
+其中$\mathcal{L}_{ce}$为多类别交叉熵损失，$\mathcal{L}_{bce}$为二值交叉熵损失，$\lambda$控制边界监督强度。当前实验仅将边界增强模型作为一种完整方法参与横向对比，不展开不同$\lambda$设置下的消融分析。
+
+\section{实验}
+
+\subsection{数据集}
+
+本文在完整CamVid数据集上进行方法横向对比实验。实验使用fastai发布的CamVid数据包，数据集中包含701张带像素级语义标签的道路场景图像，并提供`valid.txt`作为验证集划分。本文按照该划分使用600张图像作为训练集，101张图像作为测试/验证集。类别文件`codes.txt`共包含32个类别，其中Void类作为忽略类别，不参与mIoU和PA计算。
+
+需要说明的是，本文当前实验只关注不同方法在同一数据集、同一划分、同一训练设置下的横向性能对比，不进行复现细节实验，也不进行消融实验。由于课程设计环境和时间有限，输入图像统一缩放到$96 \times 128$，该设置主要用于保证不同方法可以在本机完成可重复训练与测试。因此，本实验属于完整CamVid划分下的轻量benchmark对比，绝对指标不直接等同于高分辨率、长周期训练的公开排行榜结果。
+
+\subsection{评价指标}
+
+本文采用mIoU、Pixel Accuracy、Boundary F1和FPS评价不同方法。mIoU用于衡量各类别预测区域与真实区域的平均交并比，是语义分割任务最重要的综合指标：
+
+\begin{equation}
+    mIoU = \frac{1}{K}\sum_{k=1}^{K}\frac{TP_k}{TP_k + FP_k + FN_k}.
+\end{equation}
+
+Pixel Accuracy表示所有有效像素中分类正确的比例。Boundary F1用于评价预测边界与真实边界的一致性，更适合观察道路边缘、车辆轮廓、行人等细节区域的分割质量。FPS表示模型单张图像推理速度，用于辅助分析不同结构的效率差异。
+
+\subsection{实现设置}
+
+实验环境为Python 3.12、PyTorch 2.6.0和CUDA 12.4。所有方法使用相同训练集、测试/验证集、输入尺寸和训练轮数。训练轮数为20 epochs，batch size为8，优化器为AdamW，初始学习率为$1\times10^{-3}$。训练过程中保存测试mIoU最高的模型权重，最终报告该最优模型在测试/验证集上的mIoU、PA、Boundary F1和FPS。
+
+本文比较三种方法。UNetSmall是小型CNN编码器-解码器基线；TinySegFormer是参考SegFormer思想实现的轻量Transformer分割模型，包含重叠patch embedding、自注意力编码和MLP风格解码；TinySegFormer\_Boundary是在TinySegFormer基础上加入边界预测头和边界监督的改进方法。三种方法均作为完整模型参与横向比较，不再拆分不同组件进行消融。
+
+\subsection{方法对比实验}
+
+完整CamVid划分上的方法对比结果如表\ref{tab:camvid_benchmark_real}所示。
+
+\begin{table}[H]
+\centering
+\caption{完整CamVid划分上的方法对比实验结果}
+\label{tab:camvid_benchmark_real}
+\begin{tabular}{lccccc}
+\toprule
+方法 & Best Epoch & mIoU(\%) & PA(\%) & Boundary F1(\%) & FPS \\
+\midrule
+UNetSmall & 20 & 27.41 & 86.34 & 54.98 & 311.6 \\
+TinySegFormer & 20 & 25.05 & 83.00 & 46.30 & 189.5 \\
+TinySegFormer\_Boundary & 19 & 26.30 & 85.34 & 46.81 & 204.9 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+从表\ref{tab:camvid_benchmark_real}可以看出，在当前轻量训练设置下，UNetSmall取得最高mIoU和Boundary F1，说明小分辨率输入和有限训练轮数下，卷积编码器-解码器仍然具有较强的局部纹理建模能力。TinySegFormer的mIoU为25.05\%，低于UNetSmall，主要原因是Transformer结构通常需要更大数据量、更长训练周期或预训练权重才能充分发挥全局建模优势。TinySegFormer\_Boundary相比TinySegFormer的mIoU从25.05\%提升到26.30\%，PA从83.00\%提升到85.34\%，Boundary F1也有小幅提升，说明边界监督在完整CamVid划分上仍能带来正向影响，但其提升幅度受模型容量、输入分辨率和训练轮数限制。
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.86\textwidth]{camvid_benchmark_metrics.png}
+\caption{完整CamVid划分上的方法指标对比}
+\label{fig:camvid_benchmark_metrics}
+\end{figure}
+
+图\ref{fig:camvid_benchmark_metrics}展示了三种方法在mIoU、PA和Boundary F1上的对比。可以看到，UNetSmall在当前设置下更稳定；TinySegFormer\_Boundary相较TinySegFormer整体更优，说明本文边界增强思想在完整CamVid划分上具有一定有效性。
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.86\textwidth]{camvid_benchmark_miou_curves.png}
+\caption{完整CamVid划分上不同方法的mIoU训练曲线}
+\label{fig:camvid_benchmark_curves}
+\end{figure}
+
+图\ref{fig:camvid_benchmark_curves}给出了20个epoch内三种方法的mIoU变化趋势。UNetSmall在训练后期持续提升并达到最高结果；TinySegFormer在前期提升较慢，后期逐渐接近UNetSmall；TinySegFormer\_Boundary在多数训练阶段优于TinySegFormer，说明边界损失能够提供额外监督信号。综合来看，完整CamVid横向实验说明：在本机轻量训练条件下，CNN基线仍然强健，Transformer风格模型需要更多训练资源，而边界增强方法对TinySegFormer具有稳定的增益。
+
+\subsection{定性结果说明}
+
+本次实验保存了不同方法在测试/验证集上的预测可视化结果。从预测结果观察，UNetSmall对道路、天空、建筑等大面积区域较稳定；TinySegFormer能够利用全局上下文改善部分区域一致性，但在低分辨率训练条件下容易出现边界粗糙；TinySegFormer\_Boundary在部分车辆轮廓和道路边缘处的预测更连贯。由于当前实验重点是方法横向对比，本文不展开额外的复现细节分析和消融讨论。
+\section{总结}
+
+本文围绕城市道路场景语义分割问题，完成了近五年代表性研究成果的调研和分析，重点阅读了SegFormer、Mask2Former、PIDNet和Segment Anything四类方法。SegFormer展示了轻量Transformer在密集预测任务中的优势，其层次化Mix Transformer编码器和MLP解码器能够在较低参数量下实现有效多尺度特征融合。Mask2Former代表了从逐像素分类到mask classification的分割范式转变，使语义分割、实例分割和全景分割能够在统一框架中处理。PIDNet从实时分割角度强调边界分支的重要性，为本文改进提供了直接启发。Segment Anything则说明大规模预训练和提示式分割正在成为视觉分割任务的重要发展方向。
+
+在实验设计方面，本文在完整CamVid划分上完成UNetSmall、TinySegFormer和TinySegFormer\_Boundary三种方法的真实训练与测试。实验结果表明，在$96 \times 128$轻量输入和20个epoch训练设置下，UNetSmall取得最高mIoU和Boundary F1，说明卷积编码器-解码器在小分辨率道路场景分割中仍然稳定有效；TinySegFormer\_Boundary相较TinySegFormer在mIoU、PA和Boundary F1上均有提升，说明边界增强思想在完整CamVid划分上具有正向作用。
+
+本文的已有工作和创新工作划分如下：SegFormer的MiT编码器、空间缩减注意力和MLP解码器属于已有论文成果；Mask2Former的masked attention和mask classification属于已有论文成果；PIDNet的三分支实时分割思想和边界辅助思想属于已有论文成果；SAM的提示式分割框架属于已有论文成果。本文的设计工作是在轻量Transformer分割框架上加入边界预测头，利用语义标签自动生成边界监督，并将其作为完整方法参与CamVid横向对比实验。该改进属于课程设计层面的结构组合与实验验证。
+
+本文仍存在明显不足。首先，虽然本文已经完成完整CamVid划分上的本机训练，但输入分辨率和训练轮数仍低于许多公开benchmark设置，因此绝对指标不能替代高分辨率、长周期训练的公开榜单结果。其次，Mask2Former和SAM由于训练成本较高，仅进行了理论和代码结构分析，没有纳入完整训练对比。再次，边界标签由形态学操作生成，边界宽度和损失权重会影响最终表现，后续需要在更大规模真实数据上进一步调参。未来可以从三个方向改进：一是使用更高输入分辨率和更长训练周期重新训练CamVid；二是引入知识蒸馏，将PIDNet或SAM生成的边界信息用于辅助训练轻量模型；三是探索更高效的边界融合方式，使模型在提升边界质量的同时尽量保持实时推理速度。
+
+\begin{thebibliography}{99}
+
+\bibitem{segformer}
+Xie E, Wang W, Yu Z, Anandkumar A, Alvarez J M, Luo P.
+SegFormer: Simple and Efficient Design for Semantic Segmentation with Transformers.
+Advances in Neural Information Processing Systems, 2021.
+
+\bibitem{mask2former}
+Cheng B, Misra I, Schwing A G, Kirillov A, Girdhar R.
+Masked-attention Mask Transformer for Universal Image Segmentation.
+Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition, 2022.
+
+\bibitem{pidnet}
+Xu J, Xiong Z, Bhattacharyya S P.
+PIDNet: A Real-time Semantic Segmentation Network Inspired by PID Controllers.
+Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition, 2023.
+
+\bibitem{sam}
+Kirillov A, Mintun E, Ravi N, et al.
+Segment Anything.
+Proceedings of the IEEE/CVF International Conference on Computer Vision, 2023.
+
+\bibitem{unet}
+Ronneberger O, Fischer P, Brox T.
+U-Net: Convolutional Networks for Biomedical Image Segmentation.
+Medical Image Computing and Computer-Assisted Intervention, 2015.
+
+\bibitem{deeplabv3plus}
+Chen L C, Zhu Y, Papandreou G, Schroff F, Adam H.
+Encoder-Decoder with Atrous Separable Convolution for Semantic Image Segmentation.
+Proceedings of the European Conference on Computer Vision, 2018.
+
+\bibitem{cityscapes}
+Cordts M, Omran M, Ramos S, et al.
+The Cityscapes Dataset for Semantic Urban Scene Understanding.
+Proceedings of the IEEE Conference on Computer Vision and Pattern Recognition, 2016.
+
+\bibitem{camvid}
+Brostow G J, Fauqueur J, Cipolla R.
+Semantic Object Classes in Video: A High-Definition Ground Truth Database.
+Pattern Recognition Letters, 2009.
+
+\end{thebibliography}
+
+\end{document}

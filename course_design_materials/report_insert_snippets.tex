@@ -1,0 +1,50 @@
+% 可插入报告的实验表格与公式片段
+
+\begin{table}[!htbp]
+\centering
+\caption{不同语义分割方法在 CamVid 模拟复现实验中的对比}
+\label{tab:main_compare}
+\begin{tabular}{lccccc}
+\toprule
+方法 & mIoU(\%) & PA(\%) & Boundary F1(\%) & Params(M) & FPS \\
+\midrule
+UNet & 68.4 & 89.1 & 61.2 & 31.0 & 54.0 \\
+DeepLabV3+ & 71.6 & 90.4 & 63.8 & 41.2 & 38.0 \\
+SegFormer-B0 & 75.3 & 92.1 & 67.4 & 3.8 & 72.0 \\
+PIDNet-S & 80.1 & 94.0 & 73.6 & 7.6 & 153.7 \\
+Ours & 76.7 & 92.8 & 71.9 & 4.2 & 66.0 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\begin{table}[!htbp]
+\centering
+\caption{边界增强分支的模拟消融实验}
+\label{tab:ablation}
+\begin{tabular}{lccccc}
+\toprule
+设置 & mIoU(\%) & PA(\%) & Boundary F1(\%) & Params(M) & FPS \\
+\midrule
+SegFormer-B0 & 75.3 & 92.1 & 67.4 & 3.8 & 72.0 \\
++ Boundary Head, no loss & 75.4 & 92.2 & 67.9 & 4.2 & 67.0 \\
++ Boundary Head, $\lambda=0.2$ & 76.1 & 92.6 & 70.3 & 4.2 & 66.5 \\
++ Boundary Head, $\lambda=0.4$ & 76.7 & 92.8 & 71.9 & 4.2 & 66.0 \\
++ Boundary Head, $\lambda=0.6$ & 76.2 & 92.5 & 71.5 & 4.2 & 66.0 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\begin{equation}
+\mathcal{L} = \mathcal{L}_{ce}(Y_{sem}, Y) + \lambda \mathcal{L}_{bce}(Y_{edge}, B)
+\end{equation}
+
+\begin{equation}
+mIoU = \frac{1}{K}\sum_{k=1}^{K}\frac{TP_k}{TP_k + FP_k + FN_k}
+\end{equation}
+
+% 图注建议：
+% 图X SegFormer 的多尺度 Transformer 编码器与 MLP 解码器结构示意图。
+% 图X 本文提出的边界增强 SegFormer 结构示意图。
+% 图X 不同模型在典型道路场景图像上的分割结果对比。
+% 图X 边界增强前后在车辆轮廓、道路边缘、行人区域的局部放大对比。
+

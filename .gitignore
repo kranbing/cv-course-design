@@ -1,0 +1,49 @@
+# OS/editor
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+
+# Python
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.venv/
+venv/
+
+# Large datasets
+data/
+
+# Model checkpoints and heavy experiment artifacts
+*.pt
+*.pth
+*.ckpt
+*.onnx
+*.npy
+*.npz
+experiments/**/checkpoints/
+experiments/**/runs/
+experiments/**/wandb/
+experiments/**/smoke_outputs/
+
+# Superseded local experiment outputs; keep scripts and curated figures/results.
+experiments/camvid_real/outputs/
+
+# LaTeX intermediate files
+*.aux
+*.bbl
+*.bcf
+*.blg
+*.fdb_latexmk
+*.fls
+*.log
+*.out
+*.run.xml
+*.synctex.gz
+*.toc
+*.xdv
+
+# Keep generated report PDFs trackable when needed.
+!template/main_report.pdf

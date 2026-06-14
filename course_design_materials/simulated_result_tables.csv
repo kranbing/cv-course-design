@@ -1,0 +1,12 @@
+table,method,miou,pa,boundary_f1,params_m,fps,notes
+main,UNet,68.4,89.1,61.2,31.0,54.0,CNN encoder-decoder baseline; simulated CamVid result
+main,DeepLabV3Plus,71.6,90.4,63.8,41.2,38.0,ASPP CNN baseline; simulated CamVid result
+main,SegFormer-B0,75.3,92.1,67.4,3.8,72.0,Main reproduced model; simulated from structure and public trend
+main,PIDNet-S,80.1,94.0,73.6,7.6,153.7,Official CamVid test mIoU/FPS reference from PIDNet README
+main,Ours-SegFormer-B0-Boundary,76.7,92.8,71.9,4.2,66.0,Proposed boundary-enhanced SegFormer; simulated result
+ablation,SegFormer-B0,75.3,92.1,67.4,3.8,72.0,lambda=0
+ablation,+BoundaryHead-no-loss,75.4,92.2,67.9,4.2,67.0,Additional head without explicit boundary supervision
+ablation,+BoundaryHead-lambda0.2,76.1,92.6,70.3,4.2,66.5,Moderate boundary supervision
+ablation,+BoundaryHead-lambda0.4,76.7,92.8,71.9,4.2,66.0,Best simulated setting
+ablation,+BoundaryHead-lambda0.6,76.2,92.5,71.5,4.2,66.0,Overemphasized boundary loss slightly hurts semantic region consistency
+
