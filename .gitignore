@@ -27,6 +27,8 @@ experiments/**/checkpoints/
 experiments/**/runs/
 experiments/**/wandb/
 experiments/**/smoke_outputs/
+events.out.tfevents*
+back/
 
 # Superseded local experiment outputs; keep scripts and curated figures/results.
 experiments/camvid_real/outputs/
