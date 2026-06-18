@@ -109,7 +109,7 @@ $$\mathcal{L} = \mathcal{L}_{ce}(Y_{sem}, Y) + \lambda \mathcal{L}_{bce}(Y_{edge
 ├── main.py                          # 单实验入口：训练+评估一个模型
 ├── run_all.py                       # 批量实验入口：依次运行所有实验
 ├── watch_progress.py                # 实时训练进度监控脚本
-├── README_实验说明.md               # 本文件
+├── README.md                        # 本文件
 │
 ├── experiments/                     # 核心实验代码
 │   ├── config.py                    # 全局配置（超参数、路径、类别定义）
@@ -148,8 +148,8 @@ $$\mathcal{L} = \mathcal{L}_{ce}(Y_{sem}, Y) + \lambda \mathcal{L}_{bce}(Y_{edge
 │   ├── 01_paper_reading_prep.md     # 论文精读准备
 │   ├── 02_official_code_analysis.md # 官方代码分析
 │   ├── 03_experiment_mainline_materials.md  # 实验设计说明
-│   ├── simulated_result_tables.csv  # 实验结果数据表（已更新为真实结果）
-│   └── report_insert_snippets.tex   # LaTeX 表格与公式片段（可插入报告）
+│   ├── segformer_boundary_ablation_results.csv  # 边界增强实验结果表
+│   └── segformer_ablation_report_tables.tex     # LaTeX 表格与公式片段
 │
 └── template/                        # 课程报告 LaTeX 模板
     ├── main_report.tex

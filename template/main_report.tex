@@ -15,10 +15,9 @@
 \pgfplotsset{compat=1.17}
 
 \title{基于Transformer的城市道路场景语义分割复现与边界增强改进}
-\stunum{第*组}
-\stuname{张三、李四、王五}
-\stuclass{计算机科学与技术20**级*班}
-\supervisor{**** \hspace{1.0em} 老师}
+\stuname{陈小辉，樊亦简}
+\stuclass{人工智能2023级01班}
+\supervisor{姜希若 \hspace{1.0em} 老师}
 \dateinput{\today}
 
 \begin{document}
@@ -39,12 +38,10 @@
 本课程设计围绕城市道路场景语义分割问题展开，主要完成近五年代表性论文精读、官方代码结构分析、核心算法思路整理、完整CamVid方法对比实验、改进方法设计以及报告撰写等工作。团队成员分工如下：
 
 \begin{itemize}
-    \item 张三：负责语义分割研究背景调研、SegFormer论文精读、MiT编码器与MLP解码器原理分析。
-    \item 李四：负责Mask2Former、PIDNet、Segment Anything论文阅读，整理近年分割方法的发展脉络与官方代码结构。
-    \item 王五：负责完整CamVid方法对比实验、边界增强改进方案设计、图表绘制与报告整合。
+    \item 陈小辉：负责语义分割研究背景调研、SegFormer论文精读、MiT编码器与MLP解码器原理分析，并整理近年分割方法的发展脉络与官方代码结构，最终整理PPT并汇报。
+    \item 樊亦简：负责Mask2Former、PIDNet、Segment Anything论文阅读，完成CamVid方法对比实验、边界增强改进方案设计、图表绘制与报告整合。
 \end{itemize}
 
-若以个人形式完成，可将以上分工调整为“本人独立完成文献调研、算法分析、实验训练、图表绘制和报告撰写”。
 
 \section{任务背景}
 
@@ -102,7 +99,7 @@
 \label{fig:pipeline}
 \end{figure}
 
-本文实验部分采用“完整CamVid本机训练 + 官方代码结构分析 + 轻量补充验证”的组合方式完成。主实验围绕SegFormer-B0和本文改进的SegFormer-B0+Boundary Head展开，并结合UNet、DeepLabV3+和PIDNet-S的公开结果形成参照系；官方代码分析用于讨论SegFormer、Mask2Former、PIDNet和SAM等代表性论文方法的结构特点；轻量补充实验用于验证早期UNetSmall、TinySegFormer和TinySegFormer\_Boundary实现链路。需要强调的是，公开结果、本机训练结果和轻量补充结果并非完全同源实验，本文将其分层使用：公开结果用于提供性能尺度，本机结果用于检验复现与改进，轻量实验用于验证实现链路和指标计算的稳定性。
+实验部分采用“完整CamVid本机训练 + 官方代码结构分析 + 轻量补充验证”的组合方式完成。主实验围绕SegFormer-B0和本文改进的SegFormer-B0+Boundary Head展开，并结合UNet、DeepLabV3+和PIDNet-S的公开结果形成参照系；官方代码分析用于讨论SegFormer、Mask2Former、PIDNet和SAM等代表性论文方法的结构特点；轻量补充实验用于验证早期UNetSmall、TinySegFormer和TinySegFormer\_Boundary实现链路。公开结果、本机训练结果和轻量补充结果并非完全同源实验，因此本文将其分层使用：公开结果用于提供性能尺度，本机结果用于检验复现与改进，轻量实验用于验证实现链路和指标计算的稳定性。
 
 \subsection{代表性论文与方法分析}
 
@@ -110,7 +107,7 @@
 
 SegFormer是本文的核心复现对象。该方法针对视觉Transformer在语义分割中的两个问题进行了改进：一是普通ViT缺少适合密集预测的多尺度特征，二是固定位置编码会限制模型在不同输入分辨率上的泛化。SegFormer提出Mix Transformer编码器，通过四个stage逐级降低特征图分辨率并提升通道数，得到类似CNN主干的层次化多尺度特征。同时，SegFormer不使用显式位置编码，而是在MLP模块中加入depth-wise convolution，使模型能够在保留灵活输入尺寸的同时获得局部位置信息。
 
-SegFormer编码器中的注意力模块采用空间缩减策略。对输入特征$X$计算query时保持原空间分辨率，而对key和value进行降采样，从而降低自注意力计算复杂度。若原始token数量为$N$，缩减比例为$R$，则key和value的长度约变为$N/R^2$，注意力复杂度由$O(N^2)$降低为$O(N^2/R^2)$。这种设计对高分辨率语义分割任务非常重要，因为密集预测需要保留较大的特征图。
+SegFormer编码器中的注意力模块采用空间缩减策略。对输入特征$X$计算query时保持原空间分辨率，而对key和value进行降采样，从而降低自注意力计算复杂度。若原始token数量为$N$，缩减比例为$R$，则key和value的长度约变为$N/R^2$，注意力复杂度由$O(N^2)$降低为$O(N^2/R^2)$。高分辨率语义分割需要保留较大的特征图，空间缩减注意力正是为这一计算瓶颈提供折中。
 
 SegFormer解码器则保持了较强的工程简洁性。它将四个stage输出的特征分别通过MLP投影到统一维度，再上采样到相同空间尺寸并拼接融合，最后用$1 \times 1$卷积输出类别logits。与DeepLabV3+等依赖复杂上下文模块的解码器相比，SegFormer将主要表达能力放在层次化编码器中，解码端主要承担跨尺度融合和类别映射功能，因此参数量和计算开销较低。本文选择SegFormer-B0作为复现对象，是因为其参数规模适合课程设计条件下的本机训练，同时结构足够清晰，便于分析Transformer分割模型的关键组成并开展轻量改进。
 
@@ -269,7 +266,7 @@ Y_{sem} = Conv_{1 \times 1}(F).
 B = Dilate(Y) - Erode(Y).
 \end{equation}
 
-这种生成方式不需要额外人工标注，能够直接利用CamVid已有语义标签构造边界监督；但它本质上仍是由语义mask推导出的弱边界标签，边界宽度和局部连通性会受到形态学结构元素影响。因此，本文将其定位为辅助训练信号，而不是独立的高精度轮廓标注。本文使用联合损失函数训练模型：
+该生成方式不需要额外人工标注，能够直接利用CamVid已有语义标签构造边界监督；但它本质上仍是由语义mask推导出的弱边界标签，边界宽度和局部连通性会受到形态学结构元素影响。因此，本文将其定位为辅助训练信号，而不是独立的高精度轮廓标注。模型采用联合损失函数训练：
 
 \begin{equation}
 \mathcal{L} = \mathcal{L}_{ce}(Y_{sem}, Y) + \lambda \mathcal{L}_{bce}(Y_{edge}, B),
@@ -290,9 +287,9 @@ B = Dilate(Y) - Erode(Y).
 \label{fig:camvid_test_preview}
 \end{figure}
 
-图\ref{fig:camvid_test_preview}展示了测试/验证集中连续道路场景样例。可以看到，CamVid图像包含道路、建筑、天空、车辆、行人、树木和标线等类别，既有大面积区域，也有细长边界和小目标区域，因此适合用于观察语义分割模型的整体分类能力与边界刻画能力。
+图\ref{fig:camvid_test_preview}展示了测试/验证集中连续道路场景样例。CamVid图像包含道路、建筑、天空、车辆、行人、树木和标线等类别，既有大面积区域，也有细长边界和小目标区域，因此适合用于观察语义分割模型的整体分类能力与边界刻画能力。
 
-需要说明的是，两组实验的数据版本、类别数、输入分辨率和训练策略不同，因此不能将数值直接混合比较。主实验使用$352 \times 480$输入尺寸，更接近SegFormer下采样结构对输入尺寸的要求；前期轻量benchmark使用$96 \times 128$输入尺寸，主要用于快速验证代码链路和不同结构的相对趋势。本文在正文中区分文献参考结果、本机训练结果和轻量补充实验结果，并在解释性能差异时优先讨论同一实验口径下的相对变化。
+两组实验的数据版本、类别数、输入分辨率和训练策略不同，数值不能直接混合比较。主实验使用$352 \times 480$输入尺寸，更接近SegFormer下采样结构对输入尺寸的要求；前期轻量benchmark使用$96 \times 128$输入尺寸，主要用于快速验证代码链路和不同结构的相对趋势。正文中区分文献参考结果、本机训练结果和轻量补充实验结果，并在解释性能差异时优先讨论同一实验口径下的相对变化。
 
 \subsection{评价指标}
 
@@ -331,29 +328,29 @@ Ours（SegFormer+Boundary） & 51.1 & 90.2 & 38.3 & 3.9 & 114.8 \\
 \end{tabular}
 \end{table}
 
-表\ref{tab:camvid_main_compare}显示，SegFormer-B0在本机50 epoch训练后取得51.0\% mIoU和129.9 FPS，参数量为3.7M，体现出轻量Transformer模型在效率方面的优势。加入边界分支后，Ours的mIoU由51.0\%小幅提升到51.1\%，PA由89.9\%提升到90.2\%，同时获得38.3\% Boundary F1。这一结果说明边界分支确实引入了可度量的边界预测能力，但其对整体mIoU的提升幅度有限。相比PIDNet-S等专门面向实时语义分割设计的模型，当前改进模型的绝对精度仍有明显差距。因此，本文改进更适合作为“低成本边界辅助监督”的可行性验证，而不是对成熟实时分割网络的替代。
+表\ref{tab:camvid_main_compare}显示，SegFormer-B0在本机50 epoch训练后取得51.0\% mIoU和129.9 FPS，参数量为3.7M，体现出轻量Transformer模型在效率方面的优势。加入边界分支后，Ours的mIoU由51.0\%小幅提升到51.1\%，PA由89.9\%提升到90.2\%，同时获得38.3\% Boundary F1。边界分支由此获得了可度量的轮廓预测能力，但其对整体mIoU的提升幅度有限。相比PIDNet-S等专门面向实时语义分割设计的模型，当前改进模型的绝对精度仍有明显差距。因此，本文改进更适合作为“低成本边界辅助监督”的可行性验证，而不是对成熟实时分割网络的替代。
 
 \begin{figure}[H]
 \centering
 \includegraphics[width=0.86\textwidth]{../experiments/segformer_ablation/outputs/figures/comparison_bar.png}
 \caption{CamVid主要方法指标柱状对比}
-\label{fig:member_comparison_bar}
+\label{fig:segformer_comparison_bar}
 \end{figure}
 
-图\ref{fig:member_comparison_bar}进一步展示了主要方法的mIoU、Boundary F1和FPS对比。SegFormer-B0的速度较高，但mIoU低于UNet、DeepLabV3+和PIDNet-S参考结果；边界增强模型在维持较高FPS的同时略微提升mIoU和PA，说明在$\lambda=0.4$设置下，边界监督没有对主分割任务造成明显负担。不过，考虑到参考模型结果来源和训练设置不同，该图更适合用于观察不同方法的性能量级，而不是做严格排名。
+图\ref{fig:segformer_comparison_bar}进一步展示了主要方法的mIoU、Boundary F1和FPS对比。SegFormer-B0的速度较高，但mIoU低于UNet、DeepLabV3+和PIDNet-S参考结果；边界增强模型在维持较高FPS的同时略微提升mIoU和PA，说明在$\lambda=0.4$设置下，边界监督没有对主分割任务造成明显负担。不过，考虑到参考模型结果来源和训练设置不同，该图更适合用于观察不同方法的性能量级，而不是做严格排名。
 
 \begin{figure}[H]
 \centering
 \includegraphics[width=0.86\textwidth]{../experiments/segformer_ablation/outputs/figures/curves_segformer.png}
 \caption{SegFormer-B0复现实验训练曲线}
-\label{fig:member_curve_segformer}
+\label{fig:segformer_training_curve}
 \end{figure}
 
-图\ref{fig:member_curve_segformer}给出了SegFormer-B0训练过程中的loss、mIoU和PA变化。训练前期loss快速下降，验证mIoU持续提升；后期曲线趋于平缓，说明在当前50 epoch设置下模型已经进入较慢收敛阶段。由于CamVid规模较小且训练轮数有限，继续训练、引入预训练权重或调整学习率策略仍可能带来提升，但从现有曲线看，单纯延长训练的边际收益预计低于前期阶段。
+图\ref{fig:segformer_training_curve}给出了SegFormer-B0训练过程中的loss、mIoU和PA变化。训练前期loss快速下降，验证mIoU持续提升；后期曲线趋于平缓，说明在当前50 epoch设置下模型已经进入较慢收敛阶段。由于CamVid规模较小且训练轮数有限，继续训练、引入预训练权重或调整学习率策略仍可能带来提升，但从现有曲线看，单纯延长训练的边际收益预计低于前期阶段。
 
 \subsection{定性结果说明}
 
-本次实验保存了SegFormer-B0及边界增强模型在测试集上的预测可视化结果。从预测结果观察，SegFormer-B0能够恢复道路、天空、建筑等主体区域，但在车辆轮廓、行人和道路边界等细节区域容易出现边缘不连续或小目标漏检。加入Boundary Head后，模型在部分样例中对道路边缘和车辆轮廓的刻画更连贯，这与Boundary F1指标的变化相互印证。需要注意的是，定性图只能提供直观证据，不能替代完整测试集指标；因此本文将其作为解释指标变化的辅助材料。
+实验保存了SegFormer-B0及边界增强模型在测试集上的预测可视化结果。从预测结果观察，SegFormer-B0能够恢复道路、天空、建筑等主体区域，但在车辆轮廓、行人和道路边界等细节区域容易出现边缘不连续或小目标漏检。加入Boundary Head后，模型在部分样例中对道路边缘和车辆轮廓的刻画更连贯，这与Boundary F1指标的变化相互印证。定性图只能提供直观证据，不能替代完整测试集指标，因此本文将其作为解释指标变化的辅助材料。
 
 \begin{figure}[H]
 \centering
@@ -401,7 +398,7 @@ Boundary Head, $\lambda=0.6$ & 45.1 & 89.1 & 39.7 & 3.9 & 119.2 \\
 \label{fig:curve_boundary_l04}
 \end{figure}
 
-图\ref{fig:curve_boundary_l04}展示了$\lambda=0.4$边界增强模型的训练曲线。与纯SegFormer-B0相比，边界增强模型多了边界预测目标，因此训练过程同时受到语义分类和边界监督影响。综合主实验和消融实验可以看出，本文改进的主要价值不在于大幅提升整体mIoU，而在于以较小参数增量提供显式边界建模能力，并揭示了边界辅助任务需要合适权重控制这一事实。这为后续设计更细粒度的边界融合机制提供了依据。
+图\ref{fig:curve_boundary_l04}展示了$\lambda=0.4$边界增强模型的训练曲线。与纯SegFormer-B0相比，边界增强模型多了边界预测目标，因此训练过程同时受到语义分类和边界监督影响。综合主实验和消融实验，本文改进并没有带来大幅mIoU增益，但以较小参数增量提供了显式边界建模能力，并暴露出边界辅助任务对损失权重较为敏感。这为后续设计更细粒度的边界融合机制提供了依据。
 
 \subsection{轻量benchmark补充实验}
 
@@ -414,7 +411,7 @@ Boundary Head, $\lambda=0.6$ & 45.1 & 89.1 & 39.7 & 3.9 & 119.2 \\
 
 本文的已有工作和本文设计工作划分如下：SegFormer的MiT编码器、空间缩减注意力和MLP解码器属于已有论文成果；Mask2Former的masked attention和mask classification属于已有论文成果；PIDNet的三分支实时分割思想和边界辅助思想属于已有论文成果；SAM的提示式分割框架属于已有论文成果；UNet、DeepLabV3+和PIDNet-S在主对比表中的部分数值来自公开资料或论文结果，不属于本文本机重新训练得到的模型。本文的设计工作是在SegFormer-B0语义分割框架上增加轻量边界预测分支，利用语义标签自动生成弱边界监督，并通过$\lambda=0,0.2,0.4,0.6$四组设置考察联合损失权重对mIoU、PA和Boundary F1的影响。该部分属于课程设计范围内的结构组合、实验实现和经验验证，其创新性主要体现在面向CamVid道路场景的轻量边界辅助设计与实验分析，而非提出全新的分割范式。
 
-本文仍存在若干限制。首先，虽然主实验已经使用完整CamVid划分并完成SegFormer-B0及其边界增强版本的真实训练，但训练轮数、预训练权重、数据增强策略和超参数搜索仍弱于成熟benchmark流程，因此本机结果更适合作为方法复现和改进验证，而不能直接等同于公开榜单最优性能。其次，UNet、DeepLabV3+和PIDNet-S在主实验中承担参照作用，其中部分指标不是本文同一环境下重新训练得到，横向比较时需要关注数据来源和训练协议差异。再次，Mask2Former和SAM由于训练成本较高，本文主要完成理论分析、代码结构研究和适用性讨论，没有纳入本机完整训练对比。未来可以从三个方向继续推进：一是补齐UNet、DeepLabV3+和PIDNet-S在同一CamVid环境下的统一训练，形成更严格的封闭对比；二是引入更强的数据增强、预训练模型和学习率策略，评估SegFormer系列模型在充分训练条件下的性能上限；三是探索更细粒度的边界监督方式，例如多尺度边界标签、类别自适应边界权重或由SAM生成的伪边界信息，使模型在提升轮廓质量的同时尽量保持实时推理速度。
+本文仍存在若干限制。主实验已经使用完整CamVid划分并完成SegFormer-B0及其边界增强版本的真实训练，但训练轮数、预训练权重、数据增强策略和超参数搜索仍弱于成熟benchmark流程，因此本机结果更适合作为方法复现和改进验证，不能直接等同于公开榜单最优性能。UNet、DeepLabV3+和PIDNet-S在主实验中承担参照作用，其中部分指标不是本文同一环境下重新训练得到，横向比较时需要关注数据来源和训练协议差异。Mask2Former和SAM由于训练成本较高，本文主要完成理论分析、代码结构研究和适用性讨论，没有纳入本机完整训练对比。后续工作可以沿三个方向展开：补齐UNet、DeepLabV3+和PIDNet-S在同一CamVid环境下的统一训练，形成更严格的封闭对比；引入更强的数据增强、预训练模型和学习率策略，评估SegFormer系列模型在充分训练条件下的性能上限；探索更细粒度的边界监督方式，例如多尺度边界标签、类别自适应边界权重或由SAM生成的伪边界信息，使模型在提升轮廓质量的同时尽量保持实时推理速度。
 
 \begin{thebibliography}{99}
 
@@ -459,5 +456,62 @@ Semantic Object Classes in Video: A High-Definition Ground Truth Database.
 Pattern Recognition Letters, 2009.
 
 \end{thebibliography}
+
+\clearpage
+\appendix
+\renewcommand{\thesection}{附录\Alph{section}}
+\renewcommand{\thesubsection}{\Alph{section}.\arabic{subsection}}
+\lstset{
+    language=Python,
+    numbers=left,
+    numbersep=6pt,
+    numberstyle=\tiny\color{gray},
+    basicstyle=\footnotesize\ttfamily,
+    breaklines=true,
+    breakatwhitespace=false,
+    columns=fullflexible
+}
+
+\section{核心代码：数据读取与边界标签生成}
+
+本附录列出CamVid数据读取、标签编码和边界监督构造的关键实现。数据集类负责图像与标注的配对读取、颜色标注到类别索引的转换，以及训练阶段的数据增强；边界标签函数则从语义标注中提取二值轮廓，用于本文边界增强分支的辅助监督。
+
+\lstinputlisting[
+    caption={CamVid标签编码与数据集定义},
+    firstline=149,
+    lastline=229
+]{../experiments/segformer_ablation/experiments/dataset.py}
+
+\lstinputlisting[
+    caption={由语义标注生成边界监督},
+    firstline=18,
+    lastline=48
+]{../experiments/segformer_ablation/experiments/utils.py}
+
+\section{核心代码：SegFormer边界增强模型}
+
+本文改进部分在SegFormer-B0解码器融合特征之后增加轻量边界预测头。模型前向传播同时输出语义分割logits和边界logits，训练时分别接入交叉熵损失与二值边界损失。该实现保留HuggingFace SegFormer主体结构，只在解码端增加一个小规模卷积分支。
+
+\lstinputlisting[
+    caption={SegFormer-B0与轻量边界预测头},
+    firstline=13,
+    lastline=112
+]{../experiments/segformer_ablation/experiments/models/segformer_boundary.py}
+
+\section{核心代码：训练、评价与指标计算}
+
+训练流程以语义分割损失为主项，在启用边界分支时叠加$\lambda$加权的边界损失。验证和测试阶段统计mIoU、PA、Boundary F1、参数量与FPS，用于支撑正文中的方法对比和消融分析。
+
+\lstinputlisting[
+    caption={训练与验证中的联合损失计算},
+    firstline=28,
+    lastline=157
+]{../experiments/segformer_ablation/experiments/train.py}
+
+\lstinputlisting[
+    caption={mIoU、像素精度、Boundary F1与FPS计算},
+    firstline=11,
+    lastline=73
+]{../experiments/segformer_ablation/experiments/metrics.py}
 
 \end{document}

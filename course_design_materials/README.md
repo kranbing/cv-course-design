@@ -9,6 +9,5 @@
 - `01_paper_reading_prep.md`：论文精读准备表、阅读重点、报告可引用结论。
 - `02_official_code_analysis.md`：官方 GitHub 仓库结构与核心实现分析。
 - `03_experiment_mainline_materials.md`：完整实验主线、模拟复现实验设计、图表素材清单。
-- `simulated_result_tables.csv`：报告第五章可用的定量对比与消融数据。
-- `report_insert_snippets.tex`：可复制进 LaTeX 报告的表格、公式和图说明片段。
-
+- `preliminary_simulated_results.csv`：早期模拟实验的定量对比与消融数据，保留作过程材料。
+- `benchmark_report_tables.tex`：轻量 benchmark 可复用的 LaTeX 表格、公式和图说明片段。

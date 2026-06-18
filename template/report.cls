@@ -360,7 +360,6 @@
 					\zihao{3}\bfseries{设计题目:}& \zihao{-3}\fangsong{\@title}\\
 					\cline{2-2}\\
 					\zihao{3} \bfseries{组\qquad 号:} & \hspace{1.7cm} \zihao{-3} \fangsong{\hfutrp@tokens@stunum\hspace{1.7cm}} \\
-					\cline{2-2}\\
 					\zihao{3}\bfseries{成员姓名:}& \zihao{-3}\fangsong{\hfutrp@tokens@stuname}\\
 					\cline{2-2}\\
 					\zihao{3}\bfseries{班\qquad 级:}& \zihao{-3}\fangsong{\hfutrp@tokens@stuclass}\\

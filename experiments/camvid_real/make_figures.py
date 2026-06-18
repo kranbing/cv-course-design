@@ -47,7 +47,7 @@ plt.tight_layout()
 plt.savefig(FIG / "camvid_tiny_training_curves.png", dpi=200)
 plt.close()
 
-with (FIG / "real_experiment_table.tex").open("w", encoding="utf-8") as f:
+with (FIG / "camvid_tiny_experiment_table.tex").open("w", encoding="utf-8") as f:
     f.write("\\begin{table}[H]\n")
     f.write("\\centering\n")
     f.write("\\caption{CamVid Tiny真实测试集实验结果}\n")

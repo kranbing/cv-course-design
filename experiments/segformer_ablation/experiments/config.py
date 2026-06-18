@@ -5,7 +5,7 @@ import torch
 # Paths
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 WORKSPACE_ROOT = os.path.dirname(os.path.dirname(ROOT))
-DATA_DIR = os.path.join(WORKSPACE_ROOT, "data", "CamVid_member_segformer")
+DATA_DIR = os.path.join(WORKSPACE_ROOT, "data", "CamVid_segformer_ablation")
 if not os.path.exists(DATA_DIR):
     DATA_DIR = os.path.join(ROOT, "data", "CamVid")
 OUTPUT_DIR = os.path.join(ROOT, "outputs")

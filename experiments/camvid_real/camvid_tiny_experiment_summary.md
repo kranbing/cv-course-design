@@ -36,5 +36,4 @@
 - 训练日志：`experiments/camvid_real/outputs/*/history.csv`
 - 指标柱状图：`experiments/camvid_real/figures/camvid_tiny_metrics.png`
 - 训练曲线图：`experiments/camvid_real/figures/camvid_tiny_training_curves.png`
-- LaTeX 表格片段：`experiments/camvid_real/figures/real_experiment_table.tex`
-
+- LaTeX 表格片段：`experiments/camvid_real/figures/camvid_tiny_experiment_table.tex`
